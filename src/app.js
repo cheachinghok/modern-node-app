@@ -16,10 +16,12 @@ import authRoutes from "./routes/authRoute.js"
 import orderRoutes from "./routes/orderRoutes.js"
 import analizeRoute from "./routes/analizeRoute.js"
 import userRoutes from "./routes/userRoute.js"
+import uploadRoutes from './routes/uploadRoute.js';
 
 // Import middleware
 import errorHandler from './middleware/errorHandler.js';
 import notFound from './middleware/notFound.js';
+import multerErrorHandler from './middleware/multerErrorHandler.js';
 
 const app = express();
 
@@ -39,7 +41,7 @@ app.use(compression());
 
 // CORS
 app.use(cors({
-  origin: ['http://localhost:3000','http://localhost:5173', 'https://1092-store-admin.vercel.app', 'https://1092-store.vercel.app'],
+  origin: ['http://localhost:3000','http://localhost:5173','http://localhost:8080/', 'https://1092-store-admin.vercel.app', 'https://1092-store.vercel.app'],
   credentials: true,
 }));
 
@@ -81,9 +83,11 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/analytics', analizeRoute);
 app.use('/api/users', userRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Error handling middleware
 app.use(notFound);
+app.use(multerErrorHandler);
 app.use(errorHandler);
 
 export default app;
