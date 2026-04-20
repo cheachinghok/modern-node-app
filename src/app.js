@@ -39,7 +39,7 @@ app.use(compression());
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000'|| 'https://1092-store-admin.vercel.app',
   credentials: true,
 }));
 
