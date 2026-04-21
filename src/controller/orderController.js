@@ -225,6 +225,72 @@ export const updateOrderStatus = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get order profit report (per day or per month) for logged in user
+// @route   GET /api/orders/report
+// @access  Private
+export const getMyOrderReport = asyncHandler(async (req, res) => {
+  const { period = 'daily', startDate, endDate } = req.query;
+
+  const end = endDate ? new Date(endDate) : new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = startDate
+    ? new Date(startDate)
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  start.setHours(0, 0, 0, 0);
+
+  const dateFormat = period === 'monthly' ? '%Y-%m' : '%Y-%m-%d';
+
+  const pipeline = [
+    {
+      $match: {
+        user: req.user._id,
+        createdAt: { $gte: start, $lte: end },
+      },
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: dateFormat, date: '$createdAt' } },
+        profit: { $sum: '$totalProfit' },
+        revenue: { $sum: '$totalAmount' },
+        cost: { $sum: '$totalCost' },
+        orders: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+    {
+      $project: {
+        _id: 0,
+        date: '$_id',
+        profit: 1,
+        revenue: 1,
+        cost: 1,
+        orders: 1,
+      },
+    },
+  ];
+
+  const data = await Order.aggregate(pipeline);
+
+  const summary = data.reduce(
+    (acc, row) => ({
+      totalProfit: acc.totalProfit + row.profit,
+      totalRevenue: acc.totalRevenue + row.revenue,
+      totalCost: acc.totalCost + row.cost,
+      totalOrders: acc.totalOrders + row.orders,
+    }),
+    { totalProfit: 0, totalRevenue: 0, totalCost: 0, totalOrders: 0 }
+  );
+
+  res.status(200).json({
+    success: true,
+    period,
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0],
+    summary,
+    data,
+  });
+});
+
 // @desc    Get order success details
 // @route   GET /api/orders/:id/success
 // @access  Private

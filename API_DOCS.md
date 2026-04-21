@@ -189,6 +189,69 @@ GET /api/products
 
 ---
 
+### Search Products *(NEW)*
+```
+GET /api/products/search
+```
+**Protected**: No
+
+**Query Parameters**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Partial, case-insensitive match on name or description |
+| `category` | string | `Electronics`, `Clothing`, `Books`, `Home`, `Sports`, `Other` |
+| `minPrice` | number | Minimum selling price |
+| `maxPrice` | number | Maximum selling price |
+| `inStock` | boolean | `true` = only show products with stock > 0 |
+| `sortBy` | string | `name`, `sellingPrice`, `rating`, `createdAt` (default: `createdAt`) |
+| `sortOrder` | string | `asc` or `desc` (default: `desc`) |
+| `page` | number | Page number (default: 1) |
+| `limit` | number | Items per page (default: 10) |
+
+**Examples**
+```
+GET /api/products/search?search=phone&inStock=true&sortBy=sellingPrice&sortOrder=asc
+GET /api/products/search?category=Electronics&minPrice=10&maxPrice=200&page=1&limit=5
+GET /api/products/search?search=headphone&sortBy=rating&sortOrder=desc
+```
+
+**Response 200**
+```json
+{
+  "success": true,
+  "count": 3,
+  "total": 3,
+  "pagination": {
+    "page": 1,
+    "pages": 1,
+    "limit": 10
+  },
+  "data": [ ...products ]
+}
+```
+
+**React fetch example**
+```js
+const searchProducts = async ({ search, category, inStock, sortBy, sortOrder, page }) => {
+  const params = new URLSearchParams();
+  if (search)    params.append('search', search);
+  if (category)  params.append('category', category);
+  if (inStock)   params.append('inStock', 'true');
+  if (sortBy)    params.append('sortBy', sortBy);
+  if (sortOrder) params.append('sortOrder', sortOrder);
+  if (page)      params.append('page', page);
+
+  const res = await fetch(`/api/products/search?${params.toString()}`);
+  const data = await res.json();
+  return data; // data.data = array of products, data.total = total count
+};
+```
+
+> **Note**: `/api/products/search` uses regex matching (supports partial words like `"head"` → matches `"Headphones"`). The existing `GET /api/products?search=` uses MongoDB full-text index and requires complete words.
+
+---
+
 ### Get Single Product
 ```
 GET /api/products/:id
@@ -458,6 +521,98 @@ GET /api/orders/:id
 POST /api/orders/:id/process
 ```
 **Protected**: Yes
+
+---
+
+### Get My Order Profit Report *(NEW)*
+```
+GET /api/orders/report
+```
+**Protected**: Yes
+
+Returns the logged-in user's orders aggregated by day or month, showing profit, revenue, cost, and order count.
+
+**Query Parameters**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `period` | string | `daily` (default) or `monthly` |
+| `startDate` | string | ISO date `YYYY-MM-DD` (default: 30 days ago) |
+| `endDate` | string | ISO date `YYYY-MM-DD` (default: today) |
+
+**Examples**
+```
+GET /api/orders/report
+GET /api/orders/report?period=daily&startDate=2026-04-01&endDate=2026-04-21
+GET /api/orders/report?period=monthly&startDate=2026-01-01&endDate=2026-04-21
+```
+
+**Response 200**
+```json
+{
+  "success": true,
+  "period": "daily",
+  "startDate": "2026-03-22",
+  "endDate": "2026-04-21",
+  "summary": {
+    "totalProfit": 500.00,
+    "totalRevenue": 1200.00,
+    "totalCost": 700.00,
+    "totalOrders": 12
+  },
+  "data": [
+    {
+      "date": "2026-04-01",
+      "profit": 80.00,
+      "revenue": 200.00,
+      "cost": 120.00,
+      "orders": 2
+    },
+    {
+      "date": "2026-04-05",
+      "profit": 150.00,
+      "revenue": 350.00,
+      "cost": 200.00,
+      "orders": 3
+    }
+  ]
+}
+```
+
+> `data` only includes dates where at least one order exists. Days/months with no orders are not returned.
+
+**React fetch example**
+```js
+const getOrderReport = async ({ period = 'daily', startDate, endDate, token }) => {
+  const params = new URLSearchParams({ period });
+  if (startDate) params.append('startDate', startDate);
+  if (endDate)   params.append('endDate', endDate);
+
+  const res = await fetch(`/api/orders/report?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  return data;
+  // data.summary  → totals for the full period
+  // data.data     → array of { date, profit, revenue, cost, orders }
+};
+```
+
+**Chart integration example (recharts)**
+```jsx
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+
+// data.data from the API maps directly to recharts format
+<LineChart data={reportData.data}>
+  <CartesianGrid strokeDasharray="3 3" />
+  <XAxis dataKey="date" />
+  <YAxis />
+  <Tooltip />
+  <Line type="monotone" dataKey="profit"  stroke="#10b981" name="Profit" />
+  <Line type="monotone" dataKey="revenue" stroke="#3b82f6" name="Revenue" />
+  <Line type="monotone" dataKey="cost"    stroke="#ef4444" name="Cost" />
+</LineChart>
+```
 
 ---
 

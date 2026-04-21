@@ -52,6 +52,65 @@ export const getProducts = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Search products with flexible filtering and sorting
+// @route   GET /api/products/search
+// @access  Public
+export const searchProducts = asyncHandler(async (req, res) => {
+  const {
+    search,
+    category,
+    minPrice,
+    maxPrice,
+    inStock,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    page = 1,
+    limit = 10,
+  } = req.query;
+
+  let query = { isActive: true };
+
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } },
+    ];
+  }
+  if (category) query.category = category;
+  if (minPrice || maxPrice) {
+    query.sellingPrice = {};
+    if (minPrice) query.sellingPrice.$gte = parseFloat(minPrice);
+    if (maxPrice) query.sellingPrice.$lte = parseFloat(maxPrice);
+  }
+  if (inStock === 'true') query.stock = { $gt: 0 };
+
+  const allowedSortFields = ['name', 'sellingPrice', 'rating', 'createdAt'];
+  const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+  const sort = { [sortField]: sortOrder === 'asc' ? 1 : -1 };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [products, total] = await Promise.all([
+    Product.find(query)
+      .populate('createdBy', 'name email')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Product.countDocuments(query),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    total,
+    pagination: {
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      limit: parseInt(limit),
+    },
+    data: products,
+  });
+});
+
 // @desc    Get single product
 // @route   GET /api/products/:id
 // @access  Public

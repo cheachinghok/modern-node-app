@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import {
   getProducts,
   getProduct,
+  searchProducts,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -39,6 +40,7 @@ const productValidation = [
 
 // PUBLIC ROUTES
 router.get('/', getProducts);
+router.get('/search', searchProducts);
 router.get('/:id', getProduct);
 
 // Add the /create route specifically

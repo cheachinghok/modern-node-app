@@ -4,6 +4,7 @@ import {
   createOrder,
   getOrderById,
   getMyOrders,
+  getMyOrderReport,
   getAllOrders,
   updateOrderStatus,
   processOrderPayment,
@@ -50,6 +51,7 @@ router.use(protect);
 // User routes
 router.post('/', orderValidation, createOrder);
 router.get('/my-orders', getMyOrders);
+router.get('/report', getMyOrderReport);
 router.get('/:id', getOrderById);
 router.get('/:id/success', getOrderSuccess);
 router.post('/:id/process', processOrderPayment);
