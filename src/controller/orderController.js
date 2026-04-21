@@ -240,13 +240,11 @@ export const getMyOrderReport = asyncHandler(async (req, res) => {
 
   const dateFormat = period === 'monthly' ? '%Y-%m' : '%Y-%m-%d';
 
-  const pipeline = [
-    {
-      $match: {
-        user: req.user._id,
-        createdAt: { $gte: start, $lte: end },
-      },
-    },
+  const matchStage = { user: req.user._id, createdAt: { $gte: start, $lte: end } };
+
+  // Time-series: count ALL orders regardless of status — payment status is display-only
+  const timeSeriesPipeline = [
+    { $match: matchStage },
     {
       $group: {
         _id: { $dateToString: { format: dateFormat, date: '$createdAt' } },
@@ -254,6 +252,8 @@ export const getMyOrderReport = asyncHandler(async (req, res) => {
         revenue: { $sum: '$totalAmount' },
         cost: { $sum: '$totalCost' },
         orders: { $sum: 1 },
+        paidOrders: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } },
+        unpaidOrders: { $sum: { $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0] } },
       },
     },
     { $sort: { _id: 1 } },
@@ -265,11 +265,27 @@ export const getMyOrderReport = asyncHandler(async (req, res) => {
         revenue: 1,
         cost: 1,
         orders: 1,
+        paidOrders: 1,
+        unpaidOrders: 1,
       },
     },
   ];
 
-  const data = await Order.aggregate(pipeline);
+  // Payment status summary across the whole period
+  const paymentSummaryPipeline = [
+    { $match: matchStage },
+    { $group: { _id: '$paymentStatus', count: { $sum: 1 } } },
+  ];
+
+  const [data, paymentCounts] = await Promise.all([
+    Order.aggregate(timeSeriesPipeline),
+    Order.aggregate(paymentSummaryPipeline),
+  ]);
+
+  const paymentSummary = paymentCounts.reduce((acc, row) => {
+    acc[row._id] = row.count;
+    return acc;
+  }, { paid: 0, pending: 0, failed: 0, refunded: 0 });
 
   const summary = data.reduce(
     (acc, row) => ({
@@ -286,8 +302,141 @@ export const getMyOrderReport = asyncHandler(async (req, res) => {
     period,
     startDate: start.toISOString().split('T')[0],
     endDate: end.toISOString().split('T')[0],
+    note: 'All orders are counted toward profit regardless of payment or delivery status. paymentSummary is for display only.',
     summary,
+    paymentSummary,
     data,
+  });
+});
+
+// @desc    Get order profit report for all users (Admin) — filterable by userId
+// @route   GET /api/orders/report/admin
+// @access  Private/Admin
+export const getOrderReportAdmin = asyncHandler(async (req, res) => {
+  const { period = 'daily', startDate, endDate, userId } = req.query;
+
+  const end = endDate ? new Date(endDate) : new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = startDate
+    ? new Date(startDate)
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  start.setHours(0, 0, 0, 0);
+
+  const dateFormat = period === 'monthly' ? '%Y-%m' : '%Y-%m-%d';
+
+  const matchStage = { createdAt: { $gte: start, $lte: end } };
+  if (userId) {
+    const { default: mongoose } = await import('mongoose');
+    matchStage.user = new mongoose.Types.ObjectId(userId);
+  }
+
+  // Time-series: ALL orders count — payment status is display-only
+  const timeSeriesPipeline = [
+    { $match: matchStage },
+    {
+      $group: {
+        _id: { $dateToString: { format: dateFormat, date: '$createdAt' } },
+        profit: { $sum: '$totalProfit' },
+        revenue: { $sum: '$totalAmount' },
+        cost: { $sum: '$totalCost' },
+        orders: { $sum: 1 },
+        paidOrders: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } },
+        unpaidOrders: { $sum: { $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0] } },
+      },
+    },
+    { $sort: { _id: 1 } },
+    {
+      $project: {
+        _id: 0,
+        date: '$_id',
+        profit: 1,
+        revenue: 1,
+        cost: 1,
+        orders: 1,
+        paidOrders: 1,
+        unpaidOrders: 1,
+      },
+    },
+  ];
+
+  // Per-user breakdown
+  const userBreakdownPipeline = [
+    { $match: matchStage },
+    {
+      $group: {
+        _id: '$user',
+        totalProfit: { $sum: '$totalProfit' },
+        totalRevenue: { $sum: '$totalAmount' },
+        totalCost: { $sum: '$totalCost' },
+        totalOrders: { $sum: 1 },
+        paidOrders: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } },
+        unpaidOrders: { $sum: { $cond: [{ $ne: ['$paymentStatus', 'paid'] }, 1, 0] } },
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'userInfo',
+      },
+    },
+    { $unwind: { path: '$userInfo', preserveNullAndEmpty: true } },
+    { $sort: { totalProfit: -1 } },
+    {
+      $project: {
+        _id: 0,
+        userId: '$_id',
+        name: '$userInfo.name',
+        email: '$userInfo.email',
+        totalProfit: 1,
+        totalRevenue: 1,
+        totalCost: 1,
+        totalOrders: 1,
+        paidOrders: 1,
+        unpaidOrders: 1,
+      },
+    },
+  ];
+
+  // Payment status counts across the period
+  const paymentSummaryPipeline = [
+    { $match: matchStage },
+    { $group: { _id: '$paymentStatus', count: { $sum: 1 } } },
+  ];
+
+  const [timeSeries, userBreakdown, paymentCounts] = await Promise.all([
+    Order.aggregate(timeSeriesPipeline),
+    Order.aggregate(userBreakdownPipeline),
+    Order.aggregate(paymentSummaryPipeline),
+  ]);
+
+  const paymentSummary = paymentCounts.reduce((acc, row) => {
+    acc[row._id] = row.count;
+    return acc;
+  }, { paid: 0, pending: 0, failed: 0, refunded: 0 });
+
+  const summary = timeSeries.reduce(
+    (acc, row) => ({
+      totalProfit: acc.totalProfit + row.profit,
+      totalRevenue: acc.totalRevenue + row.revenue,
+      totalCost: acc.totalCost + row.cost,
+      totalOrders: acc.totalOrders + row.orders,
+    }),
+    { totalProfit: 0, totalRevenue: 0, totalCost: 0, totalOrders: 0 }
+  );
+
+  res.status(200).json({
+    success: true,
+    period,
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0],
+    filteredByUser: userId || null,
+    note: 'All orders are counted toward profit regardless of payment or delivery status. paymentSummary is for display only.',
+    summary,
+    paymentSummary,
+    data: timeSeries,
+    userBreakdown,
   });
 });
 

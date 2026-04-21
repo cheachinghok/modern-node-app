@@ -5,6 +5,7 @@ import {
   getOrderById,
   getMyOrders,
   getMyOrderReport,
+  getOrderReportAdmin,
   getAllOrders,
   updateOrderStatus,
   processOrderPayment,
@@ -58,6 +59,7 @@ router.post('/:id/process', processOrderPayment);
 
 // Admin routes
 router.get('/', authorize('admin'), getAllOrders);
+router.get('/report/admin', authorize('admin'), getOrderReportAdmin);
 router.put('/:id/status', authorize('admin'), updateOrderStatus);
 
 export default router;

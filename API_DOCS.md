@@ -616,6 +616,128 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
 ---
 
+### Get All Users Order Report *(Admin only — NEW)*
+```
+GET /api/orders/report/admin
+```
+**Protected**: Yes (Admin only)
+
+Returns a time-series report across **all users**, plus a per-user profit breakdown. Filter down to a single user with `userId`.
+
+**Query Parameters**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `period` | string | `daily` (default) or `monthly` |
+| `startDate` | string | ISO date `YYYY-MM-DD` (default: 30 days ago) |
+| `endDate` | string | ISO date `YYYY-MM-DD` (default: today) |
+| `userId` | string | MongoDB user `_id` — filter to one specific user |
+
+**Examples**
+```
+GET /api/orders/report/admin
+GET /api/orders/report/admin?period=monthly&startDate=2026-01-01&endDate=2026-04-21
+GET /api/orders/report/admin?userId=64f1a2b3c4d5e6f7a8b9c0d1&period=daily
+```
+
+**Response 200 (all users)**
+```json
+{
+  "success": true,
+  "period": "daily",
+  "startDate": "2026-03-22",
+  "endDate": "2026-04-21",
+  "filteredByUser": null,
+  "summary": {
+    "totalProfit": 1800.00,
+    "totalRevenue": 4500.00,
+    "totalCost": 2700.00,
+    "totalOrders": 35
+  },
+  "data": [
+    { "date": "2026-04-01", "profit": 200.00, "revenue": 500.00, "cost": 300.00, "orders": 5 },
+    { "date": "2026-04-02", "profit": 150.00, "revenue": 400.00, "cost": 250.00, "orders": 3 }
+  ],
+  "userBreakdown": [
+    {
+      "userId": "64f1a2b3c4d5e6f7a8b9c0d1",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "totalProfit": 900.00,
+      "totalRevenue": 2200.00,
+      "totalCost": 1300.00,
+      "totalOrders": 18
+    },
+    {
+      "userId": "64f1a2b3c4d5e6f7a8b9c0d2",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "totalProfit": 900.00,
+      "totalRevenue": 2300.00,
+      "totalCost": 1400.00,
+      "totalOrders": 17
+    }
+  ]
+}
+```
+
+> When `userId` is provided, `filteredByUser` equals that ID and `userBreakdown` contains only that user's entry.
+
+**React fetch example**
+```js
+const getAdminReport = async ({ period = 'daily', startDate, endDate, userId, token }) => {
+  const params = new URLSearchParams({ period });
+  if (startDate) params.append('startDate', startDate);
+  if (endDate)   params.append('endDate', endDate);
+  if (userId)    params.append('userId', userId);
+
+  const res = await fetch(`/api/orders/report/admin?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+  // .summary        → overall totals
+  // .data           → time-series (for charts)
+  // .userBreakdown  → ranked list of users by profit (for table)
+};
+```
+
+**Admin dashboard pattern — user selector + chart**
+```jsx
+const [selectedUser, setSelectedUser] = useState(null);
+const [report, setReport] = useState(null);
+
+useEffect(() => {
+  getAdminReport({ period, startDate, endDate, userId: selectedUser, token })
+    .then(setReport);
+}, [selectedUser, period, startDate, endDate]);
+
+// User selector (populate from GET /api/users)
+<select onChange={(e) => setSelectedUser(e.target.value || null)}>
+  <option value="">All Users</option>
+  {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+</select>
+
+// Time-series chart — report.data maps directly
+<LineChart data={report?.data}>
+  <Line dataKey="profit"  stroke="#10b981" name="Profit" />
+  <Line dataKey="revenue" stroke="#3b82f6" name="Revenue" />
+  <Line dataKey="cost"    stroke="#ef4444" name="Cost" />
+</LineChart>
+
+// Per-user table — report.userBreakdown (sorted by profit desc)
+{report?.userBreakdown.map(u => (
+  <tr key={u.userId}>
+    <td>{u.name}</td>
+    <td>{u.email}</td>
+    <td>${u.totalRevenue}</td>
+    <td>${u.totalProfit}</td>
+    <td>{u.totalOrders}</td>
+  </tr>
+))}
+```
+
+---
+
 ## Users *(Admin only)*
 
 ### List Users
