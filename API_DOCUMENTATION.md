@@ -352,6 +352,85 @@ Delete a product permanently.
 
 ---
 
+### `GET /api/products/low-stock`
+
+Get all active products with stock at or below a threshold.
+
+**Access:** Admin/User
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `threshold` | number | Stock level threshold (default: `10`) |
+| `page` | number | Page number (default: `1`) |
+| `limit` | number | Results per page (default: `10`) |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "count": 3,
+  "total": 3,
+  "pagination": {
+    "page": 1,
+    "pages": 1,
+    "limit": 10
+  },
+  "data": [
+    {
+      "_id": "64abc123...",
+      "name": "USB Cable",
+      "stock": 2,
+      "buyingPrice": 2,
+      "sellingPrice": 9.99,
+      "category": "Electronics"
+    }
+  ]
+}
+```
+
+---
+
+### `PATCH /api/products/:id/stock-in`
+
+Add stock quantity to a specific product.
+
+**Access:** Admin/User
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "quantity": 50
+}
+```
+
+| Field | Type | Required | Rules |
+|-------|------|----------|-------|
+| `quantity` | number | Yes | Positive integer >= 1 |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Stock updated. Added 50 unit(s).",
+  "data": {
+    "_id": "64abc123...",
+    "name": "USB Cable",
+    "stock": 52,
+    "buyingPrice": 2,
+    "sellingPrice": 9.99,
+    "category": "Electronics"
+  }
+}
+```
+
+---
+
 ## Orders — `/api/orders`
 
 > All order endpoints require authentication.

@@ -7,6 +7,8 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getLowStockProducts,
+  stockIn,
 } from '../controller/porductController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -38,9 +40,19 @@ const productValidation = [
     .withMessage('Invalid category'),
 ];
 
+// Stock-in validation rules
+const stockInValidation = [
+  body('quantity')
+    .notEmpty()
+    .withMessage('Quantity is required')
+    .isInt({ min: 1 })
+    .withMessage('Quantity must be a positive integer'),
+];
+
 // PUBLIC ROUTES
 router.get('/', getProducts);
 router.get('/search', searchProducts);
+router.get('/low-stock', protect, authorize('admin'), getLowStockProducts);
 router.get('/:id', getProduct);
 
 // Add the /create route specifically
@@ -50,5 +62,6 @@ router.post('/create', protect, productValidation, createProduct);
 router.post('/', protect, productValidation, createProduct);
 router.put('/:id', protect, authorize('admin'), productValidation, updateProduct);
 router.delete('/:id', protect, authorize('admin'), deleteProduct);
+router.patch('/:id/stock-in', protect, authorize('admin'), stockInValidation, stockIn);
 
 export default router;

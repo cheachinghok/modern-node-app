@@ -230,3 +230,61 @@ export const deleteProduct = asyncHandler(async (req, res, next) => {
     message: 'Product deleted successfully',
   });
 });
+
+// @desc    Get low stock products
+// @route   GET /api/products/low-stock
+// @access  Private/Admin
+export const getLowStockProducts = asyncHandler(async (req, res) => {
+  const threshold = parseInt(req.query.threshold) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  const query = { stock: { $lte: threshold }, isActive: true };
+
+  const [products, total] = await Promise.all([
+    Product.find(query)
+      .select('name stock buyingPrice sellingPrice category')
+      .sort({ stock: 1 })
+      .skip(skip)
+      .limit(limit),
+    Product.countDocuments(query),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    total,
+    pagination: { page, pages: Math.ceil(total / limit), limit },
+    data: products,
+  });
+});
+
+// @desc    Add stock to a product (stock-in)
+// @route   PATCH /api/products/:id/stock-in
+// @access  Private/Admin
+export const stockIn = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+
+  const { quantity } = req.body;
+
+  const product = await Product.findById(req.params.id);
+  if (!product) {
+    return res.status(404).json({ success: false, message: 'Product not found' });
+  }
+
+  const updated = await Product.findByIdAndUpdate(
+    req.params.id,
+    { $inc: { stock: quantity } },
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: `Stock updated. Added ${quantity} unit(s).`,
+    data: updated,
+  });
+});
