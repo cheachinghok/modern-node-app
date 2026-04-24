@@ -626,6 +626,125 @@ Valid values: `pending`, `processing`, `shipped`, `delivered`, `cancelled`
 
 ---
 
+### `GET /api/orders/report`
+
+Get the profit report for the currently logged-in user's orders only. Users cannot access other users' data.
+
+**Access:** Private
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `period` | string | `daily` (default) or `monthly` |
+| `startDate` | string | Start date `YYYY-MM-DD` (default: 30 days ago) |
+| `endDate` | string | End date `YYYY-MM-DD` (default: today) |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "period": "daily",
+  "startDate": "2026-03-23",
+  "endDate": "2026-04-22",
+  "note": "All orders are counted toward profit regardless of payment or delivery status. paymentSummary is for display only.",
+  "summary": {
+    "totalProfit": 299.94,
+    "totalRevenue": 599.94,
+    "totalCost": 300,
+    "totalOrders": 6
+  },
+  "paymentSummary": {
+    "paid": 4,
+    "pending": 2,
+    "failed": 0,
+    "refunded": 0
+  },
+  "data": [
+    {
+      "date": "2026-04-20",
+      "profit": 99.98,
+      "revenue": 199.98,
+      "cost": 100,
+      "orders": 2,
+      "paidOrders": 1,
+      "unpaidOrders": 1
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/orders/report/admin`
+
+Get the profit report for all users with per-user breakdown. Optionally filter by a specific user.
+
+**Access:** Admin
+
+**Headers:** `Authorization: Bearer <admin-token>`
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `period` | string | `daily` (default) or `monthly` |
+| `startDate` | string | Start date `YYYY-MM-DD` (default: 30 days ago) |
+| `endDate` | string | End date `YYYY-MM-DD` (default: today) |
+| `userId` | string | Filter to a specific user's orders (optional) |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "period": "daily",
+  "startDate": "2026-03-23",
+  "endDate": "2026-04-22",
+  "filteredByUser": null,
+  "note": "All orders are counted toward profit regardless of payment or delivery status. paymentSummary is for display only.",
+  "summary": {
+    "totalProfit": 899.82,
+    "totalRevenue": 1799.82,
+    "totalCost": 900,
+    "totalOrders": 18
+  },
+  "paymentSummary": {
+    "paid": 12,
+    "pending": 5,
+    "failed": 1,
+    "refunded": 0
+  },
+  "data": [
+    {
+      "date": "2026-04-20",
+      "profit": 299.94,
+      "revenue": 599.94,
+      "cost": 300,
+      "orders": 6,
+      "paidOrders": 4,
+      "unpaidOrders": 2
+    }
+  ],
+  "userBreakdown": [
+    {
+      "userId": "64abc123...",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "totalProfit": 299.94,
+      "totalRevenue": 599.94,
+      "totalCost": 300,
+      "totalOrders": 6,
+      "paidOrders": 4,
+      "unpaidOrders": 2
+    }
+  ]
+}
+```
+
+---
+
 ## Analytics — `/api/analytics`
 
 > All analytics endpoints require Admin access.

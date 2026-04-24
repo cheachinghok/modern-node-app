@@ -32,14 +32,24 @@ export const getProfitAnalytics = asyncHandler(async (req, res, next) => {
       startDate = new Date('2020-01-01');
   }
 
+  // Non-admin users: scope to orders containing only their products
+  let productIdFilter = null;
+  if (req.user.role !== 'admin') {
+    const userProducts = await Product.find({ createdBy: req.user._id }, '_id');
+    productIdFilter = userProducts.map(p => p._id);
+  }
+
+  const baseMatch = {
+    paymentStatus: 'paid',
+    orderStatus: { $ne: 'cancelled' },
+    createdAt: { $gte: startDate, $lte: endDate },
+    ...(productIdFilter ? { 'items.product': { $in: productIdFilter } } : {}),
+  };
+
   // Get profit data with CORRECT aggregation syntax
   const profitData = await Order.aggregate([
     {
-      $match: {
-        paymentStatus: 'paid',
-        orderStatus: { $ne: 'cancelled' },
-        createdAt: { $gte: startDate, $lte: endDate }
-      }
+      $match: baseMatch
     },
     {
       $group: {
@@ -56,11 +66,7 @@ export const getProfitAnalytics = asyncHandler(async (req, res, next) => {
   // Get daily profit for the chart with CORRECT syntax
   const dailyProfit = await Order.aggregate([
     {
-      $match: {
-        paymentStatus: 'paid',
-        orderStatus: { $ne: 'cancelled' },
-        createdAt: { $gte: startDate, $lte: endDate }
-      }
+      $match: baseMatch
     },
     {
       $group: {
@@ -81,11 +87,7 @@ export const getProfitAnalytics = asyncHandler(async (req, res, next) => {
   // Get top selling products with CORRECT profit calculation
   const topProducts = await Order.aggregate([
     {
-      $match: {
-        paymentStatus: 'paid',
-        orderStatus: { $ne: 'cancelled' },
-        createdAt: { $gte: startDate, $lte: endDate }
-      }
+      $match: baseMatch
     },
     { $unwind: '$items' },
     {
@@ -301,13 +303,23 @@ export const getProductAnalytics = asyncHandler(async (req, res, next) => {
   else if (period === 'month') startDate.setMonth(startDate.getMonth() - 1);
   else if (period === 'year') startDate.setFullYear(startDate.getFullYear() - 1);
 
+  // Non-admin users: scope to their own products
+  let productIdFilter = null;
+  if (req.user.role !== 'admin') {
+    const userProducts = await Product.find({ createdBy: req.user._id }, '_id');
+    productIdFilter = userProducts.map(p => p._id);
+  }
+
+  const productAnalyticsMatch = {
+    paymentStatus: 'paid',
+    orderStatus: { $ne: 'cancelled' },
+    createdAt: { $gte: startDate },
+    ...(productIdFilter ? { 'items.product': { $in: productIdFilter } } : {}),
+  };
+
   const productPerformance = await Order.aggregate([
     {
-      $match: {
-        paymentStatus: 'paid',
-        orderStatus: { $ne: 'cancelled' },
-        createdAt: { $gte: startDate }
-      }
+      $match: productAnalyticsMatch
     },
     { $unwind: '$items' },
     {

@@ -14,6 +14,11 @@ export const getProducts = asyncHandler(async (req, res, next) => {
   // Build query
   let query = {};
 
+  // Non-admin users can only see products they created
+  if (req.user.role !== 'admin') {
+    query.createdBy = req.user._id;
+  }
+
   // Search
   if (req.query.search) {
     query.$text = { $search: req.query.search };
@@ -69,6 +74,11 @@ export const searchProducts = asyncHandler(async (req, res) => {
   } = req.query;
 
   let query = { isActive: true };
+
+  // Non-admin users can only see products they created
+  if (req.user.role !== 'admin') {
+    query.createdBy = req.user._id;
+  }
 
   if (search) {
     query.$or = [

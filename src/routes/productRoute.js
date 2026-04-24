@@ -49,9 +49,9 @@ const stockInValidation = [
     .withMessage('Quantity must be a positive integer'),
 ];
 
-// PUBLIC ROUTES
-router.get('/', getProducts);
-router.get('/search', searchProducts);
+// Protected routes — users see only their own products, admins see all
+router.get('/', protect, getProducts);
+router.get('/search', protect, searchProducts);
 router.get('/low-stock', protect, authorize('admin'), getLowStockProducts);
 router.get('/:id', getProduct);
 
