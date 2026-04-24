@@ -31,9 +31,9 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
     category: {
-      type: String,
+      type: mongoose.Schema.ObjectId,
+      ref: 'Category',
       required: [true, 'Please add a category'],
-      enum: ['Electronics', 'Clothing', 'Books', 'Home', 'Sports', 'Other'],
     },
     images: {
       type: [String],

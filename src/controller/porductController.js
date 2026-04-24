@@ -14,8 +14,8 @@ export const getProducts = asyncHandler(async (req, res, next) => {
   // Build query
   let query = {};
 
-  // Non-admin users can only see products they created
-  if (req.user.role !== 'admin') {
+  // If logged in as a regular user, show only their own products
+  if (req.user && req.user.role !== 'admin') {
     query.createdBy = req.user._id;
   }
 
@@ -24,7 +24,7 @@ export const getProducts = asyncHandler(async (req, res, next) => {
     query.$text = { $search: req.query.search };
   }
 
-  // Filter by category
+  // Filter by category (accepts category ID)
   if (req.query.category) {
     query.category = req.query.category;
   }
@@ -38,6 +38,7 @@ export const getProducts = asyncHandler(async (req, res, next) => {
 
   const products = await Product.find(query)
     .populate('createdBy', 'name email')
+    .populate('category', 'name description')
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 });
@@ -75,8 +76,8 @@ export const searchProducts = asyncHandler(async (req, res) => {
 
   let query = { isActive: true };
 
-  // Non-admin users can only see products they created
-  if (req.user.role !== 'admin') {
+  // If logged in as a regular user, show only their own products
+  if (req.user && req.user.role !== 'admin') {
     query.createdBy = req.user._id;
   }
 
@@ -86,7 +87,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
       { description: { $regex: search, $options: 'i' } },
     ];
   }
-  if (category) query.category = category;
+  if (category) query.category = category; // category ID
   if (minPrice || maxPrice) {
     query.sellingPrice = {};
     if (minPrice) query.sellingPrice.$gte = parseFloat(minPrice);
@@ -102,6 +103,7 @@ export const searchProducts = asyncHandler(async (req, res) => {
   const [products, total] = await Promise.all([
     Product.find(query)
       .populate('createdBy', 'name email')
+      .populate('category', 'name description')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit)),
@@ -125,7 +127,9 @@ export const searchProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/:id
 // @access  Public
 export const getProduct = asyncHandler(async (req, res, next) => {
-  const product = await Product.findById(req.params.id).populate('createdBy', 'name email');
+  const product = await Product.findById(req.params.id)
+    .populate('createdBy', 'name email')
+    .populate('category', 'name description');
 
   if (!product) {
     return res.status(404).json({
@@ -209,6 +213,14 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
     });
   }
 
+  // Regular users can only update their own products
+  if (req.user.role !== 'admin' && product.createdBy.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to update this product',
+    });
+  }
+
   product = await Product.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
@@ -230,6 +242,14 @@ export const deleteProduct = asyncHandler(async (req, res, next) => {
     return res.status(404).json({
       success: false,
       message: 'Product not found',
+    });
+  }
+
+  // Regular users can only delete their own products
+  if (req.user.role !== 'admin' && product.createdBy.toString() !== req.user._id.toString()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to delete this product',
     });
   }
 

@@ -10,7 +10,7 @@ import {
   getLowStockProducts,
   stockIn,
 } from '../controller/porductController.js';
-import { protect, authorize } from '../middleware/authMiddleware.js';
+import { protect, authorize, optionalProtect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -36,8 +36,10 @@ const productValidation = [
     .isInt({ min: 0 })
     .withMessage('Stock must be a non-negative integer'),
   body('category')
-    .isIn(['Electronics', 'Clothing', 'Books', 'Home', 'Sports', 'Other'])
-    .withMessage('Invalid category'),
+    .notEmpty()
+    .withMessage('Category is required')
+    .isMongoId()
+    .withMessage('Invalid category ID'),
 ];
 
 // Stock-in validation rules
@@ -49,9 +51,9 @@ const stockInValidation = [
     .withMessage('Quantity must be a positive integer'),
 ];
 
-// Protected routes — users see only their own products, admins see all
-router.get('/', protect, getProducts);
-router.get('/search', protect, searchProducts);
+// Public routes — filtered by ownership when token is present
+router.get('/', optionalProtect, getProducts);
+router.get('/search', optionalProtect, searchProducts);
 router.get('/low-stock', protect, authorize('admin'), getLowStockProducts);
 router.get('/:id', getProduct);
 
@@ -60,8 +62,8 @@ router.post('/create', protect, productValidation, createProduct);
 
 // Or use the standard RESTful routes (choose one approach)
 router.post('/', protect, productValidation, createProduct);
-router.put('/:id', protect, authorize('admin'), productValidation, updateProduct);
-router.delete('/:id', protect, authorize('admin'), deleteProduct);
+router.put('/:id', protect, productValidation, updateProduct);
+router.delete('/:id', protect, deleteProduct);
 router.patch('/:id/stock-in', protect, authorize('admin'), stockInValidation, stockIn);
 
 export default router;

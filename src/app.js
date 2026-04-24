@@ -9,9 +9,11 @@ import mongoose from 'mongoose';
 import 'dotenv/config';
 import './models/user.js';
 import './models/product.js';
+import './models/category.js';
 
 // Import routes
 import productRoutes from './routes/productRoute.js';
+import categoryRoutes from './routes/categoryRoute.js';
 import authRoutes from "./routes/authRoute.js"
 import orderRoutes from "./routes/orderRoutes.js"
 import analizeRoute from "./routes/analizeRoute.js"
@@ -80,6 +82,7 @@ app.get('/', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/analytics', analizeRoute);
 app.use('/api/users', userRoutes);
