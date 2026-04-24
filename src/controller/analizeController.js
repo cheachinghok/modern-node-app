@@ -32,101 +32,139 @@ export const getProfitAnalytics = asyncHandler(async (req, res, next) => {
       startDate = new Date('2020-01-01');
   }
 
-  // Non-admin users: scope to orders containing only their products
+  // Non-admin users: scope analytics to only their own products
   let productIdFilter = null;
   if (req.user.role !== 'admin') {
     const userProducts = await Product.find({ createdBy: req.user._id }, '_id');
     productIdFilter = userProducts.map(p => p._id);
   }
 
-  const baseMatch = {
+  const orderDateMatch = {
     paymentStatus: 'paid',
     orderStatus: { $ne: 'cancelled' },
     createdAt: { $gte: startDate, $lte: endDate },
-    ...(productIdFilter ? { 'items.product': { $in: productIdFilter } } : {}),
   };
 
-  // Get profit data with CORRECT aggregation syntax
-  const profitData = await Order.aggregate([
-    {
-      $match: baseMatch
-    },
-    {
-      $group: {
-        _id: null,
-        totalRevenue: { $sum: '$totalAmount' },
-        totalCost: { $sum: '$totalCost' },
-        totalProfit: { $sum: '$totalProfit' },
-        orderCount: { $sum: 1 },
-        averageOrderValue: { $avg: '$totalAmount' }
-      }
-    }
-  ]);
+  let profitData, dailyProfit, topProducts;
 
-  // Get daily profit for the chart with CORRECT syntax
-  const dailyProfit = await Order.aggregate([
-    {
-      $match: baseMatch
-    },
-    {
-      $group: {
-        _id: {
-          $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-        },
-        revenue: { $sum: '$totalAmount' },
-        cost: { $sum: '$totalCost' },
-        profit: { $sum: '$totalProfit' },
-        orders: { $sum: 1 }
-      }
-    },
-    {
-      $sort: { _id: 1 }
-    }
-  ]);
+  if (productIdFilter) {
+    // Non-admin: unwind items first, filter to user's products, then aggregate at item level
+    // so only revenue/cost from their own products is counted
+    const itemMatch = { 'items.product': { $in: productIdFilter } };
 
-  // Get top selling products with CORRECT profit calculation
-  const topProducts = await Order.aggregate([
-    {
-      $match: baseMatch
-    },
-    { $unwind: '$items' },
-    {
-      $group: {
-        _id: '$items.product',
-        productName: { $first: '$items.name' },
-        totalSold: { $sum: '$items.quantity' },
-        totalRevenue: { 
-          $sum: { 
-            $multiply: ['$items.sellingPrice', '$items.quantity'] 
-          } 
+    [profitData, dailyProfit, topProducts] = await Promise.all([
+      Order.aggregate([
+        { $match: orderDateMatch },
+        { $unwind: '$items' },
+        { $match: itemMatch },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: { $multiply: ['$items.sellingPrice', '$items.quantity'] } },
+            totalCost: { $sum: { $multiply: ['$items.buyingPrice', '$items.quantity'] } },
+            totalProfit: {
+              $sum: {
+                $multiply: [
+                  { $subtract: ['$items.sellingPrice', '$items.buyingPrice'] },
+                  '$items.quantity',
+                ],
+              },
+            },
+            orderCount: { $sum: 1 },
+            averageOrderValue: { $avg: { $multiply: ['$items.sellingPrice', '$items.quantity'] } },
+          },
         },
-        totalCost: { 
-          $sum: { 
-            $multiply: ['$items.buyingPrice', '$items.quantity'] 
-          } 
-        }
-      }
-    },
-    {
-      $addFields: {
-        totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] }
-      }
-    },
-    {
-      $lookup: {
-        from: 'products',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'productDetails'
-      }
-    },
-    {
-      $sort: { totalProfit: -1 }
-    },
-    {
-      $limit: 10
-    }
-  ]);
+      ]),
+      Order.aggregate([
+        { $match: orderDateMatch },
+        { $unwind: '$items' },
+        { $match: itemMatch },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: { $multiply: ['$items.sellingPrice', '$items.quantity'] } },
+            cost: { $sum: { $multiply: ['$items.buyingPrice', '$items.quantity'] } },
+            profit: {
+              $sum: {
+                $multiply: [
+                  { $subtract: ['$items.sellingPrice', '$items.buyingPrice'] },
+                  '$items.quantity',
+                ],
+              },
+            },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      Order.aggregate([
+        { $match: orderDateMatch },
+        { $unwind: '$items' },
+        { $match: itemMatch },
+        {
+          $group: {
+            _id: '$items.product',
+            productName: { $first: '$items.name' },
+            totalSold: { $sum: '$items.quantity' },
+            totalRevenue: { $sum: { $multiply: ['$items.sellingPrice', '$items.quantity'] } },
+            totalCost: { $sum: { $multiply: ['$items.buyingPrice', '$items.quantity'] } },
+          },
+        },
+        { $addFields: { totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] } } },
+        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'productDetails' } },
+        { $sort: { totalProfit: -1 } },
+        { $limit: 10 },
+      ]),
+    ]);
+  } else {
+    // Admin: use order-level totals (original behaviour)
+    const baseMatch = { ...orderDateMatch };
+    [profitData, dailyProfit, topProducts] = await Promise.all([
+      Order.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$totalAmount' },
+            totalCost: { $sum: '$totalCost' },
+            totalProfit: { $sum: '$totalProfit' },
+            orderCount: { $sum: 1 },
+            averageOrderValue: { $avg: '$totalAmount' },
+          },
+        },
+      ]),
+      Order.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$totalAmount' },
+            cost: { $sum: '$totalCost' },
+            profit: { $sum: '$totalProfit' },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      Order.aggregate([
+        { $match: baseMatch },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: '$items.product',
+            productName: { $first: '$items.name' },
+            totalSold: { $sum: '$items.quantity' },
+            totalRevenue: { $sum: { $multiply: ['$items.sellingPrice', '$items.quantity'] } },
+            totalCost: { $sum: { $multiply: ['$items.buyingPrice', '$items.quantity'] } },
+          },
+        },
+        { $addFields: { totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] } } },
+        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'productDetails' } },
+        { $sort: { totalProfit: -1 } },
+        { $limit: 10 },
+      ]),
+    ]);
+  }
 
   const result = profitData[0] || {
     totalRevenue: 0,
@@ -322,6 +360,8 @@ export const getProductAnalytics = asyncHandler(async (req, res, next) => {
       $match: productAnalyticsMatch
     },
     { $unwind: '$items' },
+    // For non-admin users, filter items to only their own products after unwinding
+    ...(productIdFilter ? [{ $match: { 'items.product': { $in: productIdFilter } } }] : []),
     {
       $group: {
         _id: '$items.product',
