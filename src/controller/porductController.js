@@ -263,7 +263,7 @@ export const deleteProduct = asyncHandler(async (req, res, next) => {
 
 // @desc    Get low stock products
 // @route   GET /api/products/low-stock
-// @access  Private/Admin
+// @access  Private (user sees own products only; admin sees all)
 export const getLowStockProducts = asyncHandler(async (req, res) => {
   const threshold = parseInt(req.query.threshold) || 10;
   const page = parseInt(req.query.page) || 1;
@@ -271,6 +271,11 @@ export const getLowStockProducts = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const query = { stock: { $lte: threshold }, isActive: true };
+
+  // Regular users can only see low-stock alerts for their own products
+  if (req.user.role !== 'admin') {
+    query.createdBy = req.user._id;
+  }
 
   const [products, total] = await Promise.all([
     Product.find(query)

@@ -54,7 +54,7 @@ const stockInValidation = [
 // Public routes — filtered by ownership when token is present
 router.get('/', optionalProtect, getProducts);
 router.get('/search', optionalProtect, searchProducts);
-router.get('/low-stock', protect, authorize('admin'), getLowStockProducts);
+router.get('/low-stock', protect, getLowStockProducts);
 router.get('/:id', getProduct);
 
 // Add the /create route specifically

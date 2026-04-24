@@ -213,17 +213,20 @@ Categories are dynamic and managed through the API. They must be created before 
 
 ### Integration tip for frontend
 
-1. On app load, call `GET /api/categories` to populate your category dropdown/filter UI.
+1. After login, call `GET /api/categories` — returns only the logged-in user's own categories (admin gets all).
 2. When creating or updating a product, send the category `_id` in the `category` field.
 3. To filter products by category, pass the category `_id` as `?category=<id>` to the product endpoints.
+4. Admin can create a category for a specific user by passing `userId` in the request body.
 
 ---
 
 ### `GET /api/categories`
 
-Get all active categories. Use this to populate dropdowns and filter menus.
+Get categories. Regular users see only their own; admins see all.
 
-**Access:** Public
+**Access:** Private
+
+**Headers:** `Authorization: Bearer <token>`
 
 **Response `200`:**
 ```json
@@ -253,7 +256,9 @@ Get all active categories. Use this to populate dropdowns and filter menus.
 
 Get a single category by its ID.
 
-**Access:** Public
+**Access:** Private (user can only fetch their own categories; admin can fetch any)
+
+**Headers:** `Authorization: Bearer <token>`
 
 **Response `200`:**
 ```json
@@ -271,11 +276,19 @@ Get a single category by its ID.
 }
 ```
 
+**Error `403`** — user tries to fetch a category they don't own:
+```json
+{
+  "success": false,
+  "message": "Not authorized to access this category"
+}
+```
+
 ---
 
 ### `POST /api/categories`
 
-Create a new category.
+Create a new category. When called by admin with a `userId`, the category is assigned to that user instead.
 
 **Access:** Private
 
@@ -283,14 +296,16 @@ Create a new category.
 ```json
 {
   "name": "Electronics",
-  "description": "Electronic devices and accessories"
+  "description": "Electronic devices and accessories",
+  "userId": "6628a1c2f4e3b2001c8d1234"
 }
 ```
 
 | Field | Type | Required | Rules |
 |---|---|---|---|
-| `name` | string | Yes | Max 50 chars, must be unique |
+| `name` | string | Yes | Max 50 chars, unique per user |
 | `description` | string | No | Max 200 chars |
+| `userId` | string | No | **Admin only** — assign this category to a specific user. Ignored if the caller is not admin. |
 
 **Response `201`:**
 ```json
@@ -305,6 +320,22 @@ Create a new category.
     "createdAt": "2026-04-24T10:00:00.000Z",
     "updatedAt": "2026-04-24T10:00:00.000Z"
   }
+}
+```
+
+**Error `400`** — category name already exists for this user:
+```json
+{
+  "success": false,
+  "message": "Category \"Electronics\" already exists for this user"
+}
+```
+
+**Error `404`** — admin passed a `userId` that doesn't exist:
+```json
+{
+  "success": false,
+  "message": "Target user not found"
 }
 ```
 
@@ -373,7 +404,7 @@ Delete a category permanently.
 | Create | ❌ 401 | ✅ | ✅ |
 | Update | ❌ 401 | Own products only | All products |
 | Delete | ❌ 401 | Own products only | All products |
-| Low stock | ❌ 401 | ❌ 403 | ✅ |
+| Low stock | ❌ 401 | ✅ Own products only | ✅ All products |
 | Stock-in | ❌ 401 | ❌ 403 | ✅ |
 
 ---
@@ -628,7 +659,7 @@ Permanently delete a product.
 
 Get active products with stock at or below a threshold.
 
-**Access:** Admin
+**Access:** Private (regular users see their own products only; admin sees all)
 
 **Query Parameters:**
 
@@ -1391,12 +1422,14 @@ Upload a product image to Cloudinary. Returns the URL to use in the `images` arr
 
 - [ ] Store the `token` from login/register in `localStorage` or a secure cookie
 - [ ] Attach `Authorization: Bearer <token>` header to all Private/Admin requests
-- [ ] Call `GET /api/categories` on app load to populate category dropdowns
+- [ ] Call `GET /api/categories` **after login** (requires token) to populate category dropdowns — returns only the user's own categories
 - [ ] When creating a product, send the category `_id` (not the name string)
 - [ ] When filtering products, pass `?category=<categoryId>` (not the name)
+- [ ] Admin: pass `userId` in `POST /api/categories` body to create a category for a specific user
 - [ ] Handle `401` globally — redirect to login and clear the stored token
 - [ ] Handle `403` — show "permission denied" message, not a login redirect
 - [ ] Handle `429` — show a "too many requests, please wait" message
+- [ ] For analytics, regular users will only receive data for their own products — no extra filtering needed on the frontend
 
 ---
 

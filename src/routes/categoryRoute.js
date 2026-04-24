@@ -23,13 +23,13 @@ const categoryValidation = [
     .withMessage('Description cannot exceed 200 characters'),
 ];
 
-// Public
+// All routes require authentication
+router.use(protect);
+
 router.get('/', getCategories);
 router.get('/:id', getCategory);
-
-// Private — owner or admin
-router.post('/', protect, categoryValidation, createCategory);
-router.put('/:id', protect, categoryValidation, updateCategory);
-router.delete('/:id', protect, deleteCategory);
+router.post('/', categoryValidation, createCategory);
+router.put('/:id', categoryValidation, updateCategory);
+router.delete('/:id', deleteCategory);
 
 export default router;
