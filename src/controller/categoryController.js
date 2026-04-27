@@ -5,13 +5,9 @@ import { validationResult } from 'express-validator';
 
 // @desc    Get all categories
 // @route   GET /api/categories
-// @access  Private (user sees own categories only; admin sees all)
+// @access  Private (all authenticated users see all active categories)
 export const getCategories = asyncHandler(async (req, res) => {
   const query = { isActive: true };
-
-  if (req.user.role !== 'admin') {
-    query.createdBy = req.user._id;
-  }
 
   const categories = await Category.find(query)
     .populate('createdBy', 'name email')
@@ -26,16 +22,12 @@ export const getCategories = asyncHandler(async (req, res) => {
 
 // @desc    Get single category
 // @route   GET /api/categories/:id
-// @access  Private (user can only get their own; admin can get any)
+// @access  Private (all authenticated users)
 export const getCategory = asyncHandler(async (req, res) => {
   const category = await Category.findById(req.params.id).populate('createdBy', 'name email');
 
   if (!category) {
     return res.status(404).json({ success: false, message: 'Category not found' });
-  }
-
-  if (req.user.role !== 'admin' && category.createdBy._id.toString() !== req.user._id.toString()) {
-    return res.status(403).json({ success: false, message: 'Not authorized to access this category' });
   }
 
   res.status(200).json({ success: true, data: category });
