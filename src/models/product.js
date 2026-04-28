@@ -24,6 +24,16 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Please add a selling price'],
       min: [0, 'Selling price cannot be negative'],
     },
+    buyingPriceKHR: {
+      type: Number,
+      required: [true, 'Please add a buying price in KHR'],
+      min: [0, 'Buying price (KHR) cannot be negative'],
+    },
+    sellingPriceKHR: {
+      type: Number,
+      required: [true, 'Please add a selling price in KHR'],
+      min: [0, 'Selling price (KHR) cannot be negative'],
+    },
     stock: {
       type: Number,
       required: true,
@@ -67,6 +77,11 @@ const productSchema = new mongoose.Schema(
 // Virtual for profit margin per item
 productSchema.virtual('profitMargin').get(function() {
   return this.sellingPrice - this.buyingPrice;
+});
+
+// Virtual for profit margin in KHR
+productSchema.virtual('profitMarginKHR').get(function() {
+  return this.sellingPriceKHR - this.buyingPriceKHR;
 });
 
 // Virtual for profit margin percentage

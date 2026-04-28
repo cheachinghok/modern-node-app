@@ -19,6 +19,7 @@ import orderRoutes from "./routes/orderRoutes.js"
 import analizeRoute from "./routes/analizeRoute.js"
 import userRoutes from "./routes/userRoute.js"
 import uploadRoutes from './routes/uploadRoute.js';
+import exchangeRateRoutes from './routes/exchangeRateRoute.js';
 
 // Import middleware
 import errorHandler from './middleware/errorHandler.js';
@@ -87,6 +88,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/analytics', analizeRoute);
 app.use('/api/users', userRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/exchange-rate', exchangeRateRoutes);
 
 // Error handling middleware
 app.use(notFound);

@@ -26,6 +26,21 @@ const orderItemSchema = new mongoose.Schema({
     required: true,
     min: 0,
   },
+  priceKHR: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  buyingPriceKHR: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  sellingPriceKHR: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
   product: {
     type: mongoose.Schema.ObjectId,
     ref: 'Product',
@@ -62,6 +77,21 @@ const orderSchema = new mongoose.Schema(
       min: 0,
     },
     totalCost: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalAmountKHR: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalCostKHR: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalProfitKHR: {
       type: Number,
       required: true,
       min: 0,

@@ -27,11 +27,33 @@ const productValidation = [
     .isLength({ max: 500 })
     .withMessage('Description cannot exceed 500 characters'),
   body('buyingPrice')
+    .optional()
     .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
+    .withMessage('Buying price must be a positive number'),
   body('sellingPrice')
+    .optional()
     .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
+    .withMessage('Selling price must be a positive number'),
+  body('buyingPriceKHR')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('Buying price (KHR) must be a positive number'),
+  body('sellingPriceKHR')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('Selling price (KHR) must be a positive number'),
+  body('buyingPrice').custom((value, { req }) => {
+    if (value === undefined && req.body.buyingPriceKHR === undefined) {
+      throw new Error('Either buyingPrice (USD) or buyingPriceKHR must be provided');
+    }
+    return true;
+  }),
+  body('sellingPrice').custom((value, { req }) => {
+    if (value === undefined && req.body.sellingPriceKHR === undefined) {
+      throw new Error('Either sellingPrice (USD) or sellingPriceKHR must be provided');
+    }
+    return true;
+  }),
   body('stock')
     .isInt({ min: 0 })
     .withMessage('Stock must be a non-negative integer'),

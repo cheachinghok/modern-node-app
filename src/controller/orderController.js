@@ -21,6 +21,8 @@ export const createOrder = asyncHandler(async (req, res, next) => {
   // Validate items and calculate totals with profit
   let totalAmount = 0;
   let totalCost = 0;
+  let totalAmountKHR = 0;
+  let totalCostKHR = 0;
   const orderItems = [];
 
   for (const item of items) {
@@ -45,6 +47,8 @@ export const createOrder = asyncHandler(async (req, res, next) => {
 
     totalAmount += itemRevenue;
     totalCost += itemCost;
+    totalAmountKHR += product.sellingPriceKHR * item.quantity;
+    totalCostKHR += product.buyingPriceKHR * item.quantity;
 
     orderItems.push({
       name: product.name,
@@ -52,11 +56,15 @@ export const createOrder = asyncHandler(async (req, res, next) => {
       price: product.sellingPrice,
       buyingPrice: product.buyingPrice,
       sellingPrice: product.sellingPrice,
+      priceKHR: product.sellingPriceKHR,
+      buyingPriceKHR: product.buyingPriceKHR,
+      sellingPriceKHR: product.sellingPriceKHR,
       product: item.product,
     });
   }
 
   const totalProfit = totalAmount - totalCost;
+  const totalProfitKHR = totalAmountKHR - totalCostKHR;
 
   // Create order
   const order = await Order.create({
@@ -65,6 +73,9 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     totalAmount,
     totalCost,
     totalProfit,
+    totalAmountKHR,
+    totalCostKHR,
+    totalProfitKHR,
     shippingAddress,
     paymentMethod,
     paymentStatus: 'pending',

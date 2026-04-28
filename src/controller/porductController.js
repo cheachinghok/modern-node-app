@@ -1,7 +1,39 @@
 import Product from '../models/product.js';
+import ExchangeRate from '../models/exchangeRate.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 import { validationResult } from 'express-validator';
 import logger from '../utils/logger.js';
+
+async function getExchangeRateValue() {
+  let rateDoc = await ExchangeRate.findOne();
+  if (!rateDoc) {
+    rateDoc = await ExchangeRate.create({ usdToKhr: 4100 });
+  }
+  return rateDoc.usdToKhr;
+}
+
+function resolvePrices(body, rate) {
+  let { buyingPrice, sellingPrice, buyingPriceKHR, sellingPriceKHR } = body;
+
+  buyingPrice = buyingPrice !== undefined ? parseFloat(buyingPrice) : null;
+  sellingPrice = sellingPrice !== undefined ? parseFloat(sellingPrice) : null;
+  buyingPriceKHR = buyingPriceKHR !== undefined ? parseFloat(buyingPriceKHR) : null;
+  sellingPriceKHR = sellingPriceKHR !== undefined ? parseFloat(sellingPriceKHR) : null;
+
+  if (buyingPrice !== null && buyingPriceKHR === null) {
+    buyingPriceKHR = Math.round(buyingPrice * rate);
+  } else if (buyingPriceKHR !== null && buyingPrice === null) {
+    buyingPrice = parseFloat((buyingPriceKHR / rate).toFixed(2));
+  }
+
+  if (sellingPrice !== null && sellingPriceKHR === null) {
+    sellingPriceKHR = Math.round(sellingPrice * rate);
+  } else if (sellingPriceKHR !== null && sellingPrice === null) {
+    sellingPrice = parseFloat((sellingPriceKHR / rate).toFixed(2));
+  }
+
+  return { buyingPrice, sellingPrice, buyingPriceKHR, sellingPriceKHR };
+}
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -155,11 +187,12 @@ export const createProduct = asyncHandler(async (req, res, next) => {
       errors: errors.array(),
     });
   }
-    const { name, buyingPrice, sellingPrice } = req.body;
+
+  const { name } = req.body;
 
   // Check if product name already exists (case-insensitive)
-  const existingProduct = await Product.findOne({ 
-    name: { $regex: new RegExp(`^${name}$`, 'i') } 
+  const existingProduct = await Product.findOne({
+    name: { $regex: new RegExp(`^${name}$`, 'i') }
   });
 
   if (existingProduct) {
@@ -174,14 +207,21 @@ export const createProduct = asyncHandler(async (req, res, next) => {
     });
   }
 
+  const rate = await getExchangeRateValue();
+  const { buyingPrice, sellingPrice, buyingPriceKHR, sellingPriceKHR } = resolvePrices(req.body, rate);
+
   // Validate that selling price is greater than buying price
-  if (parseFloat(sellingPrice) <= parseFloat(buyingPrice)) {
+  if (sellingPrice <= buyingPrice) {
     return res.status(400).json({
       success: false,
       message: 'Selling price must be greater than buying price',
     });
   }
-  // Add user to req.body
+
+  req.body.buyingPrice = buyingPrice;
+  req.body.sellingPrice = sellingPrice;
+  req.body.buyingPriceKHR = buyingPriceKHR;
+  req.body.sellingPriceKHR = sellingPriceKHR;
   req.body.createdBy = req.user.id;
 
   const product = await Product.create(req.body);
@@ -219,6 +259,32 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
       success: false,
       message: 'Not authorized to update this product',
     });
+  }
+
+  const hasPriceField = ['buyingPrice', 'sellingPrice', 'buyingPriceKHR', 'sellingPriceKHR'].some(
+    (f) => req.body[f] !== undefined
+  );
+
+  if (hasPriceField) {
+    const rate = await getExchangeRateValue();
+    const merged = {
+      buyingPrice: req.body.buyingPrice ?? product.buyingPrice,
+      sellingPrice: req.body.sellingPrice ?? product.sellingPrice,
+      buyingPriceKHR: req.body.buyingPriceKHR,
+      sellingPriceKHR: req.body.sellingPriceKHR,
+    };
+    const resolved = resolvePrices(merged, rate);
+    req.body.buyingPrice = resolved.buyingPrice;
+    req.body.sellingPrice = resolved.sellingPrice;
+    req.body.buyingPriceKHR = resolved.buyingPriceKHR;
+    req.body.sellingPriceKHR = resolved.sellingPriceKHR;
+
+    if (req.body.sellingPrice <= req.body.buyingPrice) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selling price must be greater than buying price',
+      });
+    }
   }
 
   product = await Product.findByIdAndUpdate(req.params.id, req.body, {
@@ -279,7 +345,7 @@ export const getLowStockProducts = asyncHandler(async (req, res) => {
 
   const [products, total] = await Promise.all([
     Product.find(query)
-      .select('name stock buyingPrice sellingPrice category')
+      .select('name stock buyingPrice sellingPrice buyingPriceKHR sellingPriceKHR category')
       .sort({ stock: 1 })
       .skip(skip)
       .limit(limit),
