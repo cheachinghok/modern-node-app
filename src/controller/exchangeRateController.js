@@ -1,4 +1,5 @@
 import ExchangeRate from '../models/exchangeRate.js';
+import Product from '../models/product.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 
 // @desc    Get current exchange rate
@@ -34,19 +35,40 @@ export const setExchangeRate = asyncHandler(async (req, res) => {
     });
   }
 
+  const newRate = Number(usdToKhr);
+
   const rate = await ExchangeRate.findOneAndUpdate(
     {},
-    { usdToKhr: Number(usdToKhr), updatedBy: req.user.id },
+    { usdToKhr: newRate, updatedBy: req.user.id },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).populate('updatedBy', 'name email');
 
+  // Bulk-recalculate KHR prices for all products based on their stored USD prices
+  const products = await Product.find({});
+  const bulkOps = products.map((p) => ({
+    updateOne: {
+      filter: { _id: p._id },
+      update: {
+        $set: {
+          buyingPriceKHR: Math.round(p.buyingPrice * newRate),
+          sellingPriceKHR: Math.round(p.sellingPrice * newRate),
+        },
+      },
+    },
+  }));
+
+  if (bulkOps.length > 0) {
+    await Product.bulkWrite(bulkOps);
+  }
+
   res.status(200).json({
     success: true,
-    message: 'Exchange rate updated successfully',
+    message: `Exchange rate updated successfully. ${bulkOps.length} product(s) KHR prices recalculated.`,
     data: {
       usdToKhr: rate.usdToKhr,
       updatedBy: rate.updatedBy,
       updatedAt: rate.updatedAt,
+      productsUpdated: bulkOps.length,
     },
   });
 });
