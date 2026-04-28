@@ -5,6 +5,6 @@ import { protect, authorize } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 router.get('/', protect, getExchangeRate);
-router.put('/', protect, authorize('admin'), setExchangeRate);
+router.put('/', protect, setExchangeRate);
 
 export default router;
